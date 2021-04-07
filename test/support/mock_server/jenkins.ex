@@ -4,10 +4,11 @@ defmodule Jenkiexs.MockServer.Jenkins do
   get "/api/json" do
     cond do
       is_nil(conn.params["tree"]) ->
-        nil
+        send_resp(conn, 400, "Bad Request")
 
       String.match?(conn.params["tree"], ~r/\Ajobs/) ->
-        "jobs[name,description,fullName,displayName,fullDisplayName,inQueue,buildable,disabled,nextBuildNumber,property[parameterDefinitions[name,defaultParameterValue[value]]]]"
+        resp = Map.put(%{}, :jobs, build_list(5, :job))
+        send_resp(conn, 200, Jason.encode!(resp))
     end
   end
 
@@ -45,6 +46,15 @@ defmodule Jenkiexs.MockServer.Jenkins do
       %{"job_name" => "success_job", "build_number" => "42"} ->
         send_resp(conn, 200, Jason.encode!(build(:build)))
 
+      %{"job_name" => "success_job", "build_number" => number} when number == "-1" ->
+        send_resp(
+          conn,
+          200,
+          Jason.encode!(
+            build(:build, %{"number" => String.to_integer(number), "building" => false})
+          )
+        )
+
       %{"job_name" => "not_found_job", "build_number" => "42"} ->
         send_resp(conn, 404, "")
 
@@ -59,11 +69,13 @@ defmodule Jenkiexs.MockServer.Jenkins do
 
   post "/job/:job_name/build" do
     case conn.params["job_name"] do
-      _job -> true
+      "buildable_job" -> send_resp(conn, 201, "")
+      "not_buildable_job" -> send_resp(conn, 400, "Not valid request")
+      _ -> send_resp(conn, 201, "")
     end
   end
 
   post "/job/:job_name/buildWithParameters" do
-    send_resp(conn, 200, Jason.encode!(%{token: "token", apiKey: "apiKey"}))
+    send_resp(conn, 201, "")
   end
 end
